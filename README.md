@@ -34,7 +34,7 @@ Fotky prací se odesílají ke zpracování do Claude API.
 
 ## Instalace APK
 
-Stáhněte `cervena-tuzka.apk` (z GitHub Actions → artefakt *cervena-tuzka-apk*, nebo z Releases),
+Stáhněte v telefonu [`cervena-tuzka.apk`](https://github.com/tomasbalvin-pixel/teacher_friend/releases/download/nejnovejsi/cervena-tuzka.apk) (release *nejnovejsi*, aktualizuje se při každém pushi; také jako artefakt v GitHub Actions),
 otevřete ho v telefonu a povolte instalaci z neznámých zdrojů. Vyžaduje Android 8.0 nebo novější.
 
 ## Sestavení
