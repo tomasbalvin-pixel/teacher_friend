@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Červená tužka</string>
+    <string name="settings">Nastavení</string>
+    <string name="take_photo">Vyfotit</string>
+    <string name="pick_file">Vybrat soubor</string>
+    <string name="clear_pages">Vyprázdnit</string>
+    <string name="instructions_hint">Zadání, správné řešení, ročník, bodování… (nepovinné)</string>
+    <string name="grade">Opravit a ohodnotit</string>
+    <string name="pages_empty">Zatím žádné stránky. Vyfoťte práci nebo vyberte PDF či obrázek.</string>
+    <string name="save_pdf">Uložit PDF</string>
+    <string name="share_pdf">Sdílet PDF</string>
+    <string name="save_images">Do galerie</string>
+    <string name="edit_hint">Klepnutím vyberete značku, tažením ji posunete. Dlouhým stiskem na prázdném místě přidáte vlastní.</string>
+</resources>

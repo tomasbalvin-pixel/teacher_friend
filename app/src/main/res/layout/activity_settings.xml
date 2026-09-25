@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView style="@style/SettingsLabel" android:text="Anthropic API klíč" />
+
+        <EditText
+            android:id="@+id/api_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="sk-ant-…"
+            android:inputType="textPassword"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Klíč získáte na console.anthropic.com. Ukládá se jen v tomto telefonu; fotografie prací se posílají k vyhodnocení do Claude API."
+            android:textColor="#FF757575"
+            android:textSize="12sp" />
+
+        <TextView style="@style/SettingsLabel" android:text="Model" />
+        <Spinner android:id="@+id/model" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+        <TextView style="@style/SettingsLabel" android:text="Hodnoticí stupnice" />
+        <Spinner android:id="@+id/scale" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+        <TextView style="@style/SettingsLabel" android:text="Přísnost" />
+        <Spinner android:id="@+id/strictness" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+        <TextView style="@style/SettingsLabel" android:text="Jazyk komentářů" />
+        <EditText
+            android:id="@+id/language"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <CheckBox
+            android:id="@+id/numbers"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Číslovat značky (odkaz na vysvětlení pod prací)" />
+
+        <CheckBox
+            android:id="@+id/checks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Odškrtávat i správné odpovědi (fajfky)" />
+
+        <CheckBox
+            android:id="@+id/summary_page"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Přidat do PDF stránku se slovním hodnocením" />
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="red_pen">#FFD7261E</color>
+    <color name="red_dark">#FF9E1B16</color>
+    <color name="paper">#FFFAF7F0</color>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
+        <item name="android:colorPrimary">@color/red_pen</item>
+        <item name="android:colorPrimaryDark">@color/red_dark</item>
+        <item name="android:colorAccent">@color/red_pen</item>
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
+    <style name="SettingsLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">20dp</item>
+        <item name="android:textColor">@color/red_dark</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- list papíru -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30,24h40l10,10v50h-50z"/>
+    <path android:strokeColor="#FFB0BEC5" android:strokeWidth="1.5" android:pathData="M36,42h36M36,50h36M36,58h28M36,66h32"/>
+    <!-- červená fajfka -->
+    <path android:strokeColor="#FFD7261E" android:strokeWidth="5" android:strokeLineCap="round"
+        android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M40,56l9,10l20,-26"/>
+    <!-- tužka -->
+    <path android:fillColor="#FFD7261E" android:pathData="M74,70l8,-8l8,8l-8,8z"/>
+    <path android:fillColor="#FFF4C27A" android:pathData="M74,70l8,8l-12,4z"/>
+</vector>
