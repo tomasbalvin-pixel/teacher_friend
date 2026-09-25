@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -64,10 +65,21 @@ public final class MainActivity extends Activity {
         progressBox = findViewById(R.id.progress_box);
         progressText = findViewById(R.id.progress_text);
 
-        findViewById(R.id.btn_camera).setOnClickListener(v -> takePhoto());
-        findViewById(R.id.btn_pick).setOnClickListener(v -> pickFiles());
-        findViewById(R.id.btn_clear).setOnClickListener(v -> confirmClear());
-        gradeButton.setOnClickListener(v -> startGrading());
+        // Záměrně bez lambd: APK musí fungovat i při sestavení nástrojem dx bez desugaringu.
+        View.OnClickListener clicks = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int id = v.getId();
+                if (id == R.id.btn_camera) takePhoto();
+                else if (id == R.id.btn_pick) pickFiles();
+                else if (id == R.id.btn_clear) confirmClear();
+                else if (id == R.id.btn_grade) startGrading();
+            }
+        };
+        findViewById(R.id.btn_camera).setOnClickListener(clicks);
+        findViewById(R.id.btn_pick).setOnClickListener(clicks);
+        findViewById(R.id.btn_clear).setOnClickListener(clicks);
+        gradeButton.setOnClickListener(clicks);
 
         instructions.setText(Session.get().instructions);
         instructions.addTextChangedListener(new TextWatcher() {
@@ -219,35 +231,41 @@ public final class MainActivity extends Activity {
         if (!uris.isEmpty()) importUris(uris, null);
     }
 
-    private void importUris(List<Uri> uris, File deleteAfter) {
+    private void importUris(final List<Uri> uris, final File deleteAfter) {
         setBusy(true, "Načítám stránky…");
-        io.execute(() -> {
-            List<File> added = new ArrayList<>();
-            String error = null;
-            int already = Session.get().pages.size();
-            for (Uri u : uris) {
-                if (already + added.size() >= PageLoader.MAX_PAGES) {
-                    error = "Načteno jen prvních " + PageLoader.MAX_PAGES + " stránek.";
-                    break;
+        io.execute(new Runnable() {
+            @Override
+            public void run() {
+                final List<File> added = new ArrayList<>();
+                String error = null;
+                int already = Session.get().pages.size();
+                for (Uri u : uris) {
+                    if (already + added.size() >= PageLoader.MAX_PAGES) {
+                        error = "Načteno jen prvních " + PageLoader.MAX_PAGES + " stránek.";
+                        break;
+                    }
+                    try {
+                        added.addAll(PageLoader.load(MainActivity.this, u, already + added.size()));
+                    } catch (IOException | SecurityException e) {
+                        error = e.getMessage() != null ? e.getMessage() : "Soubor se nepodařilo načíst.";
+                    } catch (OutOfMemoryError e) {
+                        error = "Soubor je příliš velký.";
+                    }
                 }
-                try {
-                    added.addAll(PageLoader.load(this, u, already + added.size()));
-                } catch (IOException | SecurityException e) {
-                    error = e.getMessage() != null ? e.getMessage() : "Soubor se nepodařilo načíst.";
-                } catch (OutOfMemoryError e) {
-                    error = "Soubor je příliš velký.";
-                }
+                if (deleteAfter != null) //noinspection ResultOfMethodCallIgnored
+                    deleteAfter.delete();
+                final String err = error;
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Session.get().pages.addAll(added);
+                        Session.get().result = null;
+                        setBusy(false, null);
+                        refreshPages();
+                        if (err != null) toast(err);
+                    }
+                });
             }
-            if (deleteAfter != null) //noinspection ResultOfMethodCallIgnored
-                deleteAfter.delete();
-            String err = error;
-            main.post(() -> {
-                Session.get().pages.addAll(added);
-                Session.get().result = null;
-                setBusy(false, null);
-                refreshPages();
-                if (err != null) toast(err);
-            });
         });
     }
 
@@ -255,12 +273,15 @@ public final class MainActivity extends Activity {
         if (busy || Session.get().pages.isEmpty()) return;
         new AlertDialog.Builder(this)
                 .setMessage("Odebrat všechny stránky?")
-                .setPositiveButton("Odebrat", (d, w) -> {
-                    for (File f : Session.get().pages) //noinspection ResultOfMethodCallIgnored
-                        f.delete();
-                    Session.get().pages.clear();
-                    Session.get().result = null;
-                    refreshPages();
+                .setPositiveButton("Odebrat", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        for (File f : Session.get().pages) //noinspection ResultOfMethodCallIgnored
+                            f.delete();
+                        Session.get().pages.clear();
+                        Session.get().result = null;
+                        refreshPages();
+                    }
                 })
                 .setNegativeButton("Zrušit", null)
                 .show();
@@ -284,7 +305,12 @@ public final class MainActivity extends Activity {
             iv.setLayoutParams(lp);
             iv.setContentDescription("Stránka " + (i + 1));
             final int index = i;
-            iv.setOnClickListener(v -> confirmRemove(index));
+            iv.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    confirmRemove(index);
+                }
+            });
             thumbs.addView(iv);
         }
         pagesLabel.setText(pages.isEmpty() ? "Stránky" : "Stránky: " + pages.size() + "  (klepnutím odeberete)");
@@ -292,17 +318,20 @@ public final class MainActivity extends Activity {
         gradeButton.setEnabled(!pages.isEmpty() && !busy);
     }
 
-    private void confirmRemove(int index) {
+    private void confirmRemove(final int index) {
         if (busy) return;
         new AlertDialog.Builder(this)
                 .setMessage("Odebrat stránku " + (index + 1) + "?")
-                .setPositiveButton("Odebrat", (d, w) -> {
-                    List<File> pages = Session.get().pages;
-                    if (index < pages.size()) {
-                        //noinspection ResultOfMethodCallIgnored
-                        pages.remove(index).delete();
-                        Session.get().result = null;
-                        refreshPages();
+                .setPositiveButton("Odebrat", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        List<File> pages = Session.get().pages;
+                        if (index < pages.size()) {
+                            //noinspection ResultOfMethodCallIgnored
+                            pages.remove(index).delete();
+                            Session.get().result = null;
+                            refreshPages();
+                        }
                     }
                 })
                 .setNegativeButton("Zrušit", null)
@@ -313,46 +342,61 @@ public final class MainActivity extends Activity {
 
     private void startGrading() {
         if (busy) return;
-        Prefs prefs = new Prefs(this);
+        final Prefs prefs = new Prefs(this);
         if (prefs.apiKey().isEmpty()) {
             toast("Nejdřív zadejte API klíč.");
             startActivity(new Intent(this, SettingsActivity.class));
             return;
         }
-        List<File> pages = new ArrayList<>(Session.get().pages);
-        String instr = instructions.getText().toString();
+        final List<File> pages = new ArrayList<>(Session.get().pages);
+        final String instr = instructions.getText().toString();
         setBusy(true, "Připravuji…");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        io.execute(() -> {
-            GradingResult result = null;
-            String error = null;
-            try {
-                result = new ClaudeGrader(prefs).grade(pages, instr,
-                        msg -> main.post(() -> progressText.setText(msg)));
-            } catch (ClaudeGrader.GradingException e) {
-                error = e.getMessage();
-            } catch (OutOfMemoryError e) {
-                error = "Nedostatek paměti. Zkuste méně stránek.";
-            } catch (RuntimeException e) {
-                error = "Neočekávaná chyba: " + e;
-            }
-            GradingResult r = result;
-            String err = error;
-            main.post(() -> {
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                setBusy(false, null);
-                if (isFinishing() || isDestroyed()) return;
-                if (r != null) {
-                    Session.get().result = r;
-                    startActivity(new Intent(this, ResultActivity.class));
-                } else {
-                    new AlertDialog.Builder(this)
-                            .setTitle("Hodnocení se nepodařilo")
-                            .setMessage(err)
-                            .setPositiveButton("OK", null)
-                            .show();
+        io.execute(new Runnable() {
+            @Override
+            public void run() {
+                GradingResult result = null;
+                String error = null;
+                try {
+                    result = new ClaudeGrader(prefs).grade(pages, instr, new ClaudeGrader.Progress() {
+                        @Override
+                        public void onProgress(final String msg) {
+                            main.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    progressText.setText(msg);
+                                }
+                            });
+                        }
+                    });
+                } catch (ClaudeGrader.GradingException e) {
+                    error = e.getMessage();
+                } catch (OutOfMemoryError e) {
+                    error = "Nedostatek paměti. Zkuste méně stránek.";
+                } catch (RuntimeException e) {
+                    error = "Neočekávaná chyba: " + e;
                 }
-            });
+                final GradingResult r = result;
+                final String err = error;
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        setBusy(false, null);
+                        if (isFinishing() || isDestroyed()) return;
+                        if (r != null) {
+                            Session.get().result = r;
+                            startActivity(new Intent(MainActivity.this, ResultActivity.class));
+                        } else {
+                            new AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("Hodnocení se nepodařilo")
+                                    .setMessage(err)
+                                    .setPositiveButton("OK", null)
+                                    .show();
+                        }
+                    }
+                });
+            }
         });
     }
 

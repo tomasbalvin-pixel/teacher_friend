@@ -11,8 +11,8 @@ BUILD_TOOLS="${BUILD_TOOLS:?nastavte BUILD_TOOLS na adresář build-tools}"
 # Starší aapt2 neumí načíst resources.arsc novějších platforem – pak lze zdroje linkovat proti starší.
 RES_JAR="${RES_JAR:-$ANDROID_JAR}"
 KEYSTORE="${1:-$OUT/debug.keystore}"
-VERSION_CODE="${VERSION_CODE:-1}"
-VERSION_NAME="${VERSION_NAME:-1.0}"
+VERSION_CODE="${VERSION_CODE:-2}"
+VERSION_NAME="${VERSION_NAME:-1.0.1}"
 
 rm -rf "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT"/*.apk "$OUT/res.zip"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"
@@ -38,12 +38,24 @@ javac -nowarn -Xlint:-options -encoding UTF-8 --release 8 \
     -classpath "$ANDROID_JAR" -d "$OUT/classes" @"$OUT/sources.txt"
 
 echo "» dex"
+# Starý dx lambdy neumí převést: nechal by v DEX invoke-custom/LambdaMetafactory, na kterém
+# aplikace na telefonu okamžitě spadne. Bez d8 proto nesmí kód obsahovat invokedynamic.
+if [ ! -x "$BUILD_TOOLS/d8" ]; then
+    if find "$OUT/classes" -name '*.class' -print0 | xargs -0 javap -c -p 2>/dev/null | grep -q invokedynamic; then
+        echo "✗ kód obsahuje lambdy/invokedynamic a d8 není k dispozici – dx by vytvořil nefunkční APK" >&2
+        exit 1
+    fi
+fi
 if [ -x "$BUILD_TOOLS/d8" ]; then
     "$BUILD_TOOLS/d8" --release --min-api 26 --lib "$ANDROID_JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 elif command -v dalvik-exchange >/dev/null; then
     dalvik-exchange --dex --min-sdk-version=26 --output="$OUT/dex/classes.dex" "$OUT/classes"
 else
     "$BUILD_TOOLS/dx" --dex --min-sdk-version=26 --output="$OUT/dex/classes.dex" "$OUT/classes"
+fi
+if command -v dexdump >/dev/null && dexdump -d "$OUT/dex/classes.dex" 2>/dev/null | grep -q invoke-custom; then
+    echo "✗ DEX obsahuje invoke-custom – na Androidu by aplikace spadla" >&2
+    exit 1
 fi
 (cd "$OUT/dex" && zip -q -j "$OUT/app.unaligned.apk" classes.dex)
 

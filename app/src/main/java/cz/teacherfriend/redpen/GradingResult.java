@@ -2,6 +2,7 @@ package cz.teacherfriend.redpen;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /** Výsledek hodnocení práce včetně značek, které lze v aplikaci dále upravovat. */
@@ -31,12 +32,15 @@ public final class GradingResult {
             m.number = 0;
             if (m.isListed()) listed.add(m);
         }
-        Collections.sort(listed, (a, b) -> {
-            if (a.page != b.page) return Integer.compare(a.page, b.page);
-            // Řádky: značky, jejichž středy jsou blízko sebe svisle, bereme jako jeden řádek.
-            float ay = (a.y0 + a.y1) / 2, by = (b.y0 + b.y1) / 2;
-            if (Math.abs(ay - by) > 0.015f) return Float.compare(ay, by);
-            return Float.compare(a.x0, b.x0);
+        Collections.sort(listed, new Comparator<Mark>() {
+            @Override
+            public int compare(Mark a, Mark b) {
+                if (a.page != b.page) return Integer.compare(a.page, b.page);
+                // Řádky: značky, jejichž středy jsou blízko sebe svisle, bereme jako jeden řádek.
+                float ay = (a.y0 + a.y1) / 2, by = (b.y0 + b.y1) / 2;
+                if (Math.abs(ay - by) > 0.015f) return Float.compare(ay, by);
+                return Float.compare(a.x0, b.x0);
+            }
         });
         for (int i = 0; i < listed.size(); i++) listed.get(i).number = i + 1;
     }
@@ -44,7 +48,12 @@ public final class GradingResult {
     public List<Mark> listedMarks() {
         List<Mark> out = new ArrayList<>();
         for (Mark m : marks) if (m.number > 0) out.add(m);
-        Collections.sort(out, (a, b) -> Integer.compare(a.number, b.number));
+        Collections.sort(out, new Comparator<Mark>() {
+            @Override
+            public int compare(Mark a, Mark b) {
+                return Integer.compare(a.number, b.number);
+            }
+        });
         return out;
     }
 

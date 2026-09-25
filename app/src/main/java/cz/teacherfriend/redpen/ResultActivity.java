@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -87,11 +88,23 @@ public final class ResultActivity extends Activity implements PageView.Listener 
         }
         refreshDetails();
 
-        findViewById(R.id.btn_edit_mark).setOnClickListener(v -> editSelected());
-        findViewById(R.id.btn_delete_mark).setOnClickListener(v -> deleteSelected());
-        findViewById(R.id.btn_save_pdf).setOnClickListener(v -> savePdf());
-        findViewById(R.id.btn_share_pdf).setOnClickListener(v -> sharePdf());
-        findViewById(R.id.btn_save_images).setOnClickListener(v -> saveImages());
+        // Záměrně bez lambd: APK musí fungovat i při sestavení nástrojem dx bez desugaringu.
+        View.OnClickListener clicks = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int id = v.getId();
+                if (id == R.id.btn_edit_mark) editSelected();
+                else if (id == R.id.btn_delete_mark) deleteSelected();
+                else if (id == R.id.btn_save_pdf) savePdf();
+                else if (id == R.id.btn_share_pdf) sharePdf();
+                else if (id == R.id.btn_save_images) saveImages();
+            }
+        };
+        findViewById(R.id.btn_edit_mark).setOnClickListener(clicks);
+        findViewById(R.id.btn_delete_mark).setOnClickListener(clicks);
+        findViewById(R.id.btn_save_pdf).setOnClickListener(clicks);
+        findViewById(R.id.btn_share_pdf).setOnClickListener(clicks);
+        findViewById(R.id.btn_save_images).setOnClickListener(clicks);
     }
 
     @Override
@@ -140,19 +153,27 @@ public final class ResultActivity extends Activity implements PageView.Listener 
     }
 
     @Override
-    public void onLongPressEmpty(PageView view, int page, float nx, float ny) {
+    public void onLongPressEmpty(final PageView view, final int page, final float nx, final float ny) {
         String[] labels = {"Fajfka ✓", "Přeškrtnout a opravit", "Doplnit (stříška)", "Zakroužkovat s poznámkou", "Poznámka"};
-        Mark.Kind[] kinds = {Mark.Kind.CORRECT, Mark.Kind.WRONG, Mark.Kind.MISSING, Mark.Kind.CIRCLE, Mark.Kind.NOTE};
+        final Mark.Kind[] kinds = {Mark.Kind.CORRECT, Mark.Kind.WRONG, Mark.Kind.MISSING, Mark.Kind.CIRCLE, Mark.Kind.NOTE};
         new AlertDialog.Builder(this)
                 .setTitle("Přidat značku")
-                .setItems(labels, (d, which) -> {
-                    float w = kinds[which] == Mark.Kind.CORRECT ? 0.05f : 0.14f;
-                    float h = 0.035f;
-                    Mark m = new Mark(page, kinds[which], nx - w / 2, ny - h / 2, nx + w / 2, ny + h / 2);
-                    if (m.kind == Mark.Kind.CORRECT) {
-                        addMark(view, m);
-                    } else {
-                        editMark(m, () -> addMark(view, m));
+                .setItems(labels, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        float w = kinds[which] == Mark.Kind.CORRECT ? 0.05f : 0.14f;
+                        float h = 0.035f;
+                        final Mark m = new Mark(page, kinds[which], nx - w / 2, ny - h / 2, nx + w / 2, ny + h / 2);
+                        if (m.kind == Mark.Kind.CORRECT) {
+                            addMark(view, m);
+                        } else {
+                            editMark(m, new Runnable() {
+                                @Override
+                                public void run() {
+                                    addMark(view, m);
+                                }
+                            });
+                        }
                     }
                 })
                 .show();
@@ -167,31 +188,37 @@ public final class ResultActivity extends Activity implements PageView.Listener 
 
     private void editSelected() {
         if (selectedView == null || selectedView.selected() == null) return;
-        Mark m = selectedView.selected();
-        editMark(m, () -> {
-            if (m.kind == Mark.Kind.GRADE) syncGradeFromMark(m);
-            selectionText.setText(describe(m));
-            refreshDetails();
+        final Mark m = selectedView.selected();
+        editMark(m, new Runnable() {
+            @Override
+            public void run() {
+                if (m.kind == Mark.Kind.GRADE) syncGradeFromMark(m);
+                selectionText.setText(describe(m));
+                refreshDetails();
+            }
         });
     }
 
-    private void editMark(Mark m, Runnable onSave) {
+    private void editMark(final Mark m, final Runnable onSave) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(20), dp(8), dp(20), 0);
-        boolean grade = m.kind == Mark.Kind.GRADE;
-        EditText correction = field(box, grade ? "Známka" : "Text, který se napíše na práci", m.correction);
-        EditText second = grade
+        final boolean grade = m.kind == Mark.Kind.GRADE;
+        final EditText correction = field(box, grade ? "Známka" : "Text, který se napíše na práci", m.correction);
+        final EditText second = grade
                 ? field(box, "Body (nepovinné)", m.original)
                 : field(box, "Vysvětlení pod prací (nepovinné)", m.explanation);
         new AlertDialog.Builder(this)
                 .setTitle(grade ? "Známka" : "Upravit značku")
                 .setView(box)
-                .setPositiveButton("Uložit", (d, w) -> {
-                    m.correction = correction.getText().toString().trim();
-                    if (grade) m.original = second.getText().toString().trim();
-                    else m.explanation = second.getText().toString().trim();
-                    onSave.run();
+                .setPositiveButton("Uložit", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        m.correction = correction.getText().toString().trim();
+                        if (grade) m.original = second.getText().toString().trim();
+                        else m.explanation = second.getText().toString().trim();
+                        onSave.run();
+                    }
                 })
                 .setNegativeButton("Zrušit", null)
                 .show();
@@ -262,38 +289,60 @@ public final class ResultActivity extends Activity implements PageView.Listener 
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQ_SAVE_PDF || resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        Uri target = data.getData();
-        runExport("Ukládám PDF…", () -> {
-            try (OutputStream os = getContentResolver().openOutputStream(target)) {
-                if (os == null) throw new IOException("Soubor nelze zapsat.");
-                Exporter.writePdf(this, os, session, prefs);
+        final Uri target = data.getData();
+        runExport("Ukládám PDF…", new Export() {
+            @Override
+            public String run() throws IOException {
+                try (OutputStream os = getContentResolver().openOutputStream(target)) {
+                    if (os == null) throw new IOException("Soubor nelze zapsat.");
+                    Exporter.writePdf(ResultActivity.this, os, session, prefs);
+                }
+                return "PDF uloženo.";
             }
-            return "PDF uloženo.";
         });
     }
 
     private void sharePdf() {
-        String name = baseName();
-        runExport("Připravuji PDF…", () -> {
-            File f = Exporter.sharePdfFile(this, session, prefs, name);
-            main.post(() -> share(Collections.singletonList(f), "application/pdf"));
-            return null;
+        final String name = baseName();
+        runExport("Připravuji PDF…", new Export() {
+            @Override
+            public String run() throws IOException {
+                final File f = Exporter.sharePdfFile(ResultActivity.this, session, prefs, name);
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        share(Collections.singletonList(f), "application/pdf");
+                    }
+                });
+                return null;
+            }
         });
     }
 
     private void saveImages() {
-        String name = baseName();
+        final String name = baseName();
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            runExport("Připravuji obrázky…", () -> {
-                List<File> files = Exporter.shareImageFiles(this, session, prefs, name);
-                main.post(() -> share(files, "image/jpeg"));
-                return null;
+            runExport("Připravuji obrázky…", new Export() {
+                @Override
+                public String run() throws IOException {
+                    final List<File> files = Exporter.shareImageFiles(ResultActivity.this, session, prefs, name);
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            share(files, "image/jpeg");
+                        }
+                    });
+                    return null;
+                }
             });
             return;
         }
-        runExport("Ukládám do galerie…", () -> {
-            int n = Exporter.saveToGallery(this, session, prefs, name);
-            return "Uloženo " + n + " obr. do Galerie › Pictures/Červená tužka.";
+        runExport("Ukládám do galerie…", new Export() {
+            @Override
+            public String run() throws IOException {
+                int n = Exporter.saveToGallery(ResultActivity.this, session, prefs, name);
+                return "Uloženo " + n + " obr. do Galerie › Pictures/Červená tužka.";
+            }
         });
     }
 
@@ -329,19 +378,29 @@ public final class ResultActivity extends Activity implements PageView.Listener 
         String run() throws IOException;
     }
 
-    private void runExport(String progress, Export job) {
+    private void runExport(String progress, final Export job) {
         Toast.makeText(this, progress, Toast.LENGTH_SHORT).show();
-        io.execute(() -> {
-            String msg;
-            try {
-                msg = job.run();
-            } catch (IOException e) {
-                msg = "Export selhal: " + e.getMessage();
-            } catch (OutOfMemoryError e) {
-                msg = "Export selhal: nedostatek paměti.";
+        io.execute(new Runnable() {
+            @Override
+            public void run() {
+                String msg;
+                try {
+                    msg = job.run();
+                } catch (IOException e) {
+                    msg = "Export selhal: " + e.getMessage();
+                } catch (OutOfMemoryError e) {
+                    msg = "Export selhal: nedostatek paměti.";
+                }
+                final String m = msg;
+                if (m != null) {
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(ResultActivity.this, m, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
             }
-            String m = msg;
-            if (m != null) main.post(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show());
         });
     }
 
