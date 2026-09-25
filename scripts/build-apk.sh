@@ -11,8 +11,8 @@ BUILD_TOOLS="${BUILD_TOOLS:?nastavte BUILD_TOOLS na adresář build-tools}"
 # Starší aapt2 neumí načíst resources.arsc novějších platforem – pak lze zdroje linkovat proti starší.
 RES_JAR="${RES_JAR:-$ANDROID_JAR}"
 KEYSTORE="${1:-$OUT/debug.keystore}"
-VERSION_CODE="${VERSION_CODE:-2}"
-VERSION_NAME="${VERSION_NAME:-1.0.1}"
+VERSION_CODE="${VERSION_CODE:-3}"
+VERSION_NAME="${VERSION_NAME:-1.0.2}"
 
 rm -rf "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT"/*.apk "$OUT/res.zip"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"

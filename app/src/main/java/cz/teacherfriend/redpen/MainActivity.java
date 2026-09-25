@@ -56,6 +56,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        CrashLog.install(this);
         setContentView(R.layout.activity_main);
         thumbs = findViewById(R.id.thumbs);
         pagesLabel = findViewById(R.id.pages_label);
@@ -70,10 +71,14 @@ public final class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 int id = v.getId();
-                if (id == R.id.btn_camera) takePhoto();
-                else if (id == R.id.btn_pick) pickFiles();
-                else if (id == R.id.btn_clear) confirmClear();
-                else if (id == R.id.btn_grade) startGrading();
+                try {
+                    if (id == R.id.btn_camera) takePhoto();
+                    else if (id == R.id.btn_pick) pickFiles();
+                    else if (id == R.id.btn_clear) confirmClear();
+                    else if (id == R.id.btn_grade) startGrading();
+                } catch (Throwable e) {
+                    CrashLog.showError(MainActivity.this, "Akce se nepodařila", e);
+                }
             }
         };
         findViewById(R.id.btn_camera).setOnClickListener(clicks);
@@ -93,6 +98,7 @@ public final class MainActivity extends Activity {
         }
         refreshPages();
         if (state == null) handleIncoming(getIntent());
+        CrashLog.showPreviousCrash(this);
     }
 
     @Override
@@ -185,6 +191,15 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        try {
+            handleResult(requestCode, resultCode, data);
+        } catch (Throwable e) {
+            setBusy(false, null);
+            CrashLog.showError(this, "Stránku se nepodařilo přidat", e);
+        }
+    }
+
+    private void handleResult(int requestCode, int resultCode, Intent data) throws IOException {
         if (resultCode != RESULT_OK) {
             if (requestCode == REQ_CAMERA && pendingPhoto != null) {
                 //noinspection ResultOfMethodCallIgnored
@@ -197,8 +212,17 @@ public final class MainActivity extends Activity {
             File photo = pendingPhoto;
             pendingPhoto = null;
             if (photo.length() == 0) {
-                toast("Fotoaparát nevrátil žádný snímek.");
-                return;
+                // Některé fotoaparáty EXTRA_OUTPUT ignorují a vrátí jen náhled v "data".
+                Object thumb = data != null && data.getExtras() != null ? data.getExtras().get("data") : null;
+                if (thumb instanceof Bitmap) {
+                    try (java.io.FileOutputStream os = new java.io.FileOutputStream(photo)) {
+                        ((Bitmap) thumb).compress(Bitmap.CompressFormat.JPEG, 95, os);
+                    }
+                    toast("Fotoaparát vrátil jen malý náhled – kvalita může být nižší.");
+                } else {
+                    toast("Fotoaparát nevrátil žádný snímek.");
+                    return;
+                }
             }
             List<Uri> uris = new ArrayList<>();
             uris.add(Uri.fromFile(photo));
@@ -237,32 +261,41 @@ public final class MainActivity extends Activity {
             @Override
             public void run() {
                 final List<File> added = new ArrayList<>();
-                String error = null;
-                int already = Session.get().pages.size();
-                for (Uri u : uris) {
-                    if (already + added.size() >= PageLoader.MAX_PAGES) {
-                        error = "Načteno jen prvních " + PageLoader.MAX_PAGES + " stránek.";
-                        break;
+                String note = null;
+                Throwable failure = null;
+                try {
+                    int already = Session.get().pages.size();
+                    for (Uri u : uris) {
+                        if (already + added.size() >= PageLoader.MAX_PAGES) {
+                            note = "Načteno jen prvních " + PageLoader.MAX_PAGES + " stránek.";
+                            break;
+                        }
+                        try {
+                            added.addAll(PageLoader.load(MainActivity.this, u, already + added.size()));
+                        } catch (OutOfMemoryError e) {
+                            note = "Soubor je příliš velký.";
+                        } catch (Throwable e) {
+                            // Chybu ukážeme, ale ostatní vybrané soubory ještě zkusíme načíst.
+                            failure = e;
+                        }
                     }
-                    try {
-                        added.addAll(PageLoader.load(MainActivity.this, u, already + added.size()));
-                    } catch (IOException | SecurityException e) {
-                        error = e.getMessage() != null ? e.getMessage() : "Soubor se nepodařilo načíst.";
-                    } catch (OutOfMemoryError e) {
-                        error = "Soubor je příliš velký.";
-                    }
+                    if (deleteAfter != null) //noinspection ResultOfMethodCallIgnored
+                        deleteAfter.delete();
+                } catch (Throwable e) {
+                    failure = e;
                 }
-                if (deleteAfter != null) //noinspection ResultOfMethodCallIgnored
-                    deleteAfter.delete();
-                final String err = error;
+                final String msg = note;
+                final Throwable fail = failure;
+                // Vždy vrátit obrazovku do použitelného stavu, i když načítání selhalo.
                 main.post(new Runnable() {
                     @Override
                     public void run() {
                         Session.get().pages.addAll(added);
-                        Session.get().result = null;
+                        if (!added.isEmpty()) Session.get().result = null;
                         setBusy(false, null);
                         refreshPages();
-                        if (err != null) toast(err);
+                        if (fail != null) CrashLog.showError(MainActivity.this, "Soubor se nepodařilo načíst", fail);
+                        else if (msg != null) toast(msg);
                     }
                 });
             }
@@ -357,6 +390,7 @@ public final class MainActivity extends Activity {
             public void run() {
                 GradingResult result = null;
                 String error = null;
+                Throwable failure = null;
                 try {
                     result = new ClaudeGrader(prefs).grade(pages, instr, new ClaudeGrader.Progress() {
                         @Override
@@ -373,11 +407,12 @@ public final class MainActivity extends Activity {
                     error = e.getMessage();
                 } catch (OutOfMemoryError e) {
                     error = "Nedostatek paměti. Zkuste méně stránek.";
-                } catch (RuntimeException e) {
-                    error = "Neočekávaná chyba: " + e;
+                } catch (Throwable e) {
+                    failure = e;
                 }
                 final GradingResult r = result;
                 final String err = error;
+                final Throwable fail = failure;
                 main.post(new Runnable() {
                     @Override
                     public void run() {
@@ -387,6 +422,8 @@ public final class MainActivity extends Activity {
                         if (r != null) {
                             Session.get().result = r;
                             startActivity(new Intent(MainActivity.this, ResultActivity.class));
+                        } else if (fail != null) {
+                            CrashLog.showError(MainActivity.this, "Hodnocení se nepodařilo", fail);
                         } else {
                             new AlertDialog.Builder(MainActivity.this)
                                     .setTitle("Hodnocení se nepodařilo")

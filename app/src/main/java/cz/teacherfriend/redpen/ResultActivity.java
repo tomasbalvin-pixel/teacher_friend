@@ -53,6 +53,7 @@ public final class ResultActivity extends Activity implements PageView.Listener 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        CrashLog.install(this);
         session = Session.get();
         if (session.result == null || session.pages.isEmpty()) {
             finish();
@@ -386,10 +387,16 @@ public final class ResultActivity extends Activity implements PageView.Listener 
                 String msg;
                 try {
                     msg = job.run();
-                } catch (IOException e) {
-                    msg = "Export selhal: " + e.getMessage();
                 } catch (OutOfMemoryError e) {
                     msg = "Export selhal: nedostatek paměti.";
+                } catch (final Throwable e) {
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            CrashLog.showError(ResultActivity.this, "Export selhal", e);
+                        }
+                    });
+                    return;
                 }
                 final String m = msg;
                 if (m != null) {
